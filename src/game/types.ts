@@ -13,6 +13,7 @@ export interface UnitVis {
   swap: number // bump on unit change
   guard: boolean
   ko: boolean
+  gone: boolean // thrown off the stage: not drawn until the next unit drops in
   cheer: boolean
 }
 

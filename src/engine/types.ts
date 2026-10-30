@@ -11,6 +11,7 @@ export const CARD_TYPES: readonly CardType[] = ['attack', 'special', 'step', 'bl
 export interface PlayerState {
   team: UnitId[] // the 3 preselected units
   active: number // index into team
+  fallen: boolean[] // team[i] was thrown off the stage (a ring-out) and is out for the match
   tile: number // 1..BOARD_SIZE
   hp: number // shared by the whole team
   hand: CardType[] // 6 cards
@@ -68,7 +69,8 @@ export type Beat =
       grabs: { player: PlayerId; hit: boolean; damage: number }[] // damage is applied on landing (see 'throw')
       clash: boolean
     })
-  | (BeatBase & { type: 'throw'; slot: Slot; thrower: PlayerId; target: PlayerId; from: number; to: number; damage: number })
+  | (BeatBase & { type: 'throw'; slot: Slot; thrower: PlayerId; target: PlayerId; from: number; to: number; damage: number; ringOut: boolean })
+  | (BeatBase & { type: 'respawn'; player: PlayerId; unit: number; tile: number }) // next unit drops in after a ring-out
   | (BeatBase & { type: 'strike'; slot: Slot; results: StrikeResult[] })
   | (BeatBase & { type: 'slotEnd'; slot: Slot })
   | (BeatBase & { type: 'refill'; refills: { player: PlayerId; indexes: number[] }[] })

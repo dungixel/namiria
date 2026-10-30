@@ -46,6 +46,7 @@ export function UnitSprite({ player, unitId, vis, foeTile, label }: Props) {
   return (
     <div
       className={`unit p${player} ${vis.ko ? 'ko' : ''}`}
+      hidden={vis.gone}
       style={{
         transform: `translateX(${tileX(vis.tile)}px)`,
         transitionDuration: `${vis.moveMs}ms`,

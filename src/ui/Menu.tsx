@@ -23,7 +23,7 @@ export function Menu({ onPlay }: { onPlay: () => void }) {
   }, [onPlay])
   return (
     <div className="menu">
-      <div className="stage"><Scenery /></div>
+      <div className="stage"><Scenery cliffs={false} /></div>
       <Frog x={395} flip />
       <Frog x={1105} />
       <h1 className="logo">Namiria</h1>

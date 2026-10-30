@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  createGame, resolveSync, stepOptions, throwOptions, attackTile,
+  createGame, resolveSync, stepOptions, throwOptions, attackTile, respawnTile, BOARD_SIZE, LEFT_VOID, RIGHT_VOID,
   type CardType, type GameState, type Picks, type Policy, type Beat,
 } from './index'
 
@@ -61,7 +61,7 @@ describe('Step', () => {
   it('moves 1 or 2 tiles either way, never through or onto the enemy', () => {
     expect(stepOptions(4, 6, 2)).toEqual([2, 3, 4, 5])
     expect(stepOptions(1, 3, 2)).toEqual([1, 2])
-    expect(stepOptions(10, 9, 2)).toEqual([10])
+    expect(stepOptions(9, 8, 2)).toEqual([9])
     expect(stepOptions(5, 9, 2)).toEqual([3, 4, 5, 6, 7])
   })
   it('moves before attacks resolve: stepping away dodges an attack', () => {
@@ -171,7 +171,10 @@ describe('Grab', () => {
   })
   it('throw options are within 2 tiles of the grabber and on the board', () => {
     expect(throwOptions(5)).toEqual([3, 4, 6, 7])
-    expect(throwOptions(1)).toEqual([2, 3])
+    // next to a cliff the far side is the void tile: that is the ring-out throw
+    expect(throwOptions(1)).toEqual([LEFT_VOID, 2, 3])
+    expect(throwOptions(2)).toEqual([LEFT_VOID, 1, 3, 4])
+    expect(throwOptions(9)).toEqual([7, 8, RIGHT_VOID])
   })
 })
 
@@ -184,6 +187,63 @@ describe('Special', () => {
     s.players[0].hp = 10
     r = resolveSync(s, [two(0), two()], stay)
     expect(r.state.players[0].hp).toBe(11)
+  })
+})
+
+describe('Cliffs and ring-outs', () => {
+  const offLeft = (s: GameState) => resolveSync(s, [two(0), two(0)], goTo({ 0: LEFT_VOID }))
+  it('the board has 9 tiles and the units start on 4 and 6 (mirror images around tile 5)', () => {
+    expect(BOARD_SIZE).toBe(9)
+    const s = createGame(1)
+    expect(s.players.map((p) => p.tile)).toEqual([4, 6])
+    expect(4 + 6).toBe(BOARD_SIZE + 1)
+  })
+  it('a unit pinned at the edge can be thrown into the void: it is lost, no fall damage', () => {
+    // enemy (player 1) at tile 1, we grab from tile 2 and throw them off the left cliff
+    const { state, beats } = offLeft(setup(['grab'], ['block'], [2, 1]))
+    const t = beats.find((b) => b.type === 'throw')!
+    expect(t.type === 'throw' && t.ringOut).toBe(true)
+    expect(state.players[1].fallen).toEqual([true, false, false])
+    expect(state.players[1].hp).toBe(20)
+  })
+  it('the next unit drops in at its start tile and the match goes on', () => {
+    const { state, beats } = offLeft(setup(['grab'], ['block'], [2, 1]))
+    const r = beats.find((b) => b.type === 'respawn')!
+    expect(r.type === 'respawn' && [r.player, r.unit, r.tile]).toEqual([1, 1, 6])
+    expect(state.players[1].active).toBe(1)
+    expect(state.players[1].tile).toBe(6)
+    expect(state.winner).toBeNull()
+  })
+  it('if the enemy stands on the start tile, the new unit drops in one tile toward its own edge', () => {
+    expect(respawnTile(1, 6)).toBe(7) // enemy on our start tile 6 -> tile 7
+    expect(respawnTile(0, 4)).toBe(3) // enemy on our start tile 4 -> tile 3
+    expect(respawnTile(1, 2)).toBe(6) // free: our start tile
+  })
+  it('losing the last unit loses the match', () => {
+    const s = setup(['grab'], ['block'], [2, 1])
+    s.players[1].fallen = [true, true, false]
+    s.players[1].active = 2
+    const { state, beats } = offLeft(s)
+    expect(state.winner).toBe(0)
+    expect(beats.at(-1)?.type).toBe('gameOver')
+    expect(beats.some((b) => b.type === 'respawn')).toBe(false)
+  })
+  it('throwing the enemy to a normal tile still hurts on landing, with no ring-out', () => {
+    const { state } = resolveSync(setup(['grab'], ['block'], [2, 1]), [two(0), two(0)], goTo({ 0: 4 }))
+    expect(state.players[1].hp).toBe(18)
+    expect(state.players[1].fallen).toEqual([false, false, false])
+  })
+  it('Change skips units that fell off', () => {
+    const s = setup(['change'], ['block'])
+    s.players[0].fallen = [false, true, false]
+    expect(resolveSync(s, [two(0), two(0)], stay).state.players[0].active).toBe(2)
+  })
+  it('Change does nothing when it is the only unit left', () => {
+    const s = setup(['change'], ['block'])
+    s.players[0].fallen = [false, true, true]
+    const { state, beats } = resolveSync(s, [two(0), two(0)], stay)
+    expect(state.players[0].active).toBe(0)
+    expect(beats.some((b) => b.type === 'change')).toBe(false)
   })
 })
 

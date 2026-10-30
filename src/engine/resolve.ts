@@ -1,6 +1,6 @@
 import { MAX_HP } from './constants'
 import { draw } from './deck'
-import { activeUnit, attackTile, grabDamage, grabReaches, other, stepOptions, throwOptions } from './rules'
+import { activeUnit, attackTile, grabDamage, grabReaches, isVoid, nextLivingUnit, other, respawnTile, stepOptions, throwOptions, unitsLeft } from './rules'
 import type {
   Beat,
   CardType,
@@ -64,8 +64,10 @@ export function* resolveTurn(
       if (acts[p] !== 'change') continue
       const pl = s.players[p]
       const from = pl.active
-      pl.active = (from + 1) % pl.team.length
-      changes.push({ player: p, from, to: pl.active })
+      const to = nextLivingUnit(pl)
+      if (to === from) continue // nobody to switch to
+      pl.active = to
+      changes.push({ player: p, from, to })
     }
     if (changes.length) yield { type: 'change', slot, changes, state: snap() }
 
@@ -135,8 +137,16 @@ export function* resolveTurn(
         const to = c != null && request.options.includes(c) ? c : request.default
         const from = victim.tile
         victim.tile = to
-        victim.hp = Math.max(0, victim.hp - g.damage) // the fall hurts
-        yield { type: 'throw', slot, thrower: g.player, target: victimId, from, to, damage: g.damage, state: snap() }
+        const ringOut = isVoid(to)
+        if (ringOut) victim.fallen[victim.active] = true // over the cliff: gone, no landing, no fall damage
+        else victim.hp = Math.max(0, victim.hp - g.damage) // the fall hurts
+        yield { type: 'throw', slot, thrower: g.player, target: victimId, from, to, damage: ringOut ? 0 : g.damage, ringOut, state: snap() }
+        if (ringOut) {
+          if (unitsLeft(victim) === 0) return yield* finish(g.player) // last unit gone
+          victim.active = nextLivingUnit(victim)
+          victim.tile = respawnTile(victimId, s.players[g.player].tile)
+          yield { type: 'respawn', player: victimId, unit: victim.active, tile: victim.tile, state: snap() }
+        }
       }
       const dead = PLAYERS.filter((p) => s.players[p].hp <= 0)
       if (dead.length) return yield* finish(dead.length === 2 ? 'draw' : other(dead[0]))

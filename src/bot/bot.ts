@@ -2,7 +2,7 @@
 // you picked. It imagines what you might do (random pair from your real hand), simulates the turn
 // with the real rules engine for each of its own options, and plays what works out best on average.
 import {
-  BOARD_SIZE, MAX_HP, activeUnit, resolveSync, other,
+  BOARD_SIZE, MAX_HP, activeUnit, isVoid, resolveSync, other,
   type DecisionRequest, type GameState, type Picks, type PlayerId,
 } from '../engine'
 
@@ -25,11 +25,14 @@ export function botDecide(req: DecisionRequest, state: GameState): number {
       if (foe.hand.includes('grab') && d === 1) score -= 0.7
       if (me.hand.includes('attack') && d === activeUnit(state, req.player).range) score += 0.8
       if (tile === me.tile) score -= 0.4 // a whole Step card spent standing still
-      if (tile === 1 || tile === BOARD_SIZE) score -= 0.7
+      // the cliff: being pinned at the edge next to an enemy with a Grab can cost a whole unit
+      if (tile === 1 || tile === BOARD_SIZE) score -= 1.0
+      if (foe.hand.includes('grab') && (tile <= 2 || tile >= BOARD_SIZE - 1)) score -= 0.6
     } else {
       // throwing the enemy: line up our range-2 attack, pin them against a wall, keep our back free
       const d = Math.abs(tile - me.tile)
       score += d === 2 ? 1 : 0
+      if (isVoid(tile)) score += 8 // over the cliff: that unit is gone
       if (tile === 1 || tile === BOARD_SIZE) score += 0.7
       if (me.tile === 1 || me.tile === BOARD_SIZE) score -= 0.2
     }
@@ -54,7 +57,9 @@ function score(s: GameState, me: PlayerId, before: GameState): number {
   // being aggressive is worth a bit more than being safe, otherwise everyone just blocks forever
   const edge = [1, BOARD_SIZE].includes(s.players[me].tile) ? -0.4 : 0
   const range = Math.abs(s.players[me].tile - s.players[foe].tile) === 2 ? 1.4 : 0
-  return 1.7 * dealt - lost + edge + range + (s.players[me].hp / MAX_HP) * 0.3
+  const fallen = (st: GameState, p: PlayerId) => st.players[p].fallen.filter(Boolean).length
+  const units = 7 * ((fallen(s, foe) - fallen(before, foe)) - (fallen(s, me) - fallen(before, me))) // a ring-out is worth a lot
+  return units + 1.7 * dealt - lost + edge + range + (s.players[me].hp / MAX_HP) * 0.3
 }
 
 export function chooseBotPicks(state: GameState, me: PlayerId, samples = 24): Picks {

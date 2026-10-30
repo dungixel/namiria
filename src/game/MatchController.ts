@@ -1,7 +1,7 @@
 // Runs one match against the bot: turn timer, bot lock-in, and playing back each engine "beat"
 // with animations. It lives outside React; the UI subscribes to `getView()`.
 import {
-  DECISION_SECONDS, TURN_SECONDS, createGame, other, resolveTurn,
+  BOARD_SIZE, DECISION_SECONDS, TURN_SECONDS, createGame, other, resolveTurn,
   type Beat, type Choices, type DecisionRequest, type DecisionYield, type GameState, type Picks, type PlayerId,
 } from '../engine'
 import { botDecide, chooseBotPicks } from '../bot/bot'
@@ -10,7 +10,7 @@ import type { Decision, Fx, MatchView, Popup, UnitVis } from './types'
 const DISPOSED = Symbol('disposed')
 
 const freshUnit = (tile: number): UnitVis => ({
-  tile, pose: 'idle', lift: 0, liftMs: 300, liftEase: 'out', moveMs: 400, hurt: 0, swap: 0, guard: false, ko: false, cheer: false,
+  tile, pose: 'idle', lift: 0, liftMs: 300, liftEase: 'out', moveMs: 400, hurt: 0, swap: 0, guard: false, ko: false, gone: false, cheer: false,
 })
 
 export class MatchController {
@@ -354,6 +354,20 @@ export class MatchController {
       }
       case 'throw': {
         const to = b.to
+        if (b.ringOut) {
+          // sail over the cliff, tumble and drop out of the picture
+          this.setUnit(b.target, { pose: 'idle', lift: 230, liftMs: 330, liftEase: 'out', tile: to, moveMs: 720, ko: true })
+          this.popup({ tile: this.tileOf(b.thrower), text: 'THROW!', tone: 'info', y: 215 })
+          await this.wait(330)
+          this.setUnit(b.target, { lift: -560, liftMs: 650, liftEase: 'in' })
+          await this.wait(420)
+          this.popup({ tile: to + (to < 1 ? 1 : -1) * 0.55, text: 'RING OUT!', tone: 'dmg', y: 150 })
+          await this.wait(330)
+          this.setUnit(b.target, { gone: true, ko: false, lift: 0, liftMs: 0 })
+          this.show(b.state) // the unit pip crosses out
+          await this.wait(450)
+          break
+        }
         this.setUnit(b.target, { pose: 'idle', lift: 190, liftMs: 330, liftEase: 'out', tile: to, moveMs: 660 })
         this.popup({ tile: this.tileOf(b.thrower), text: 'THROW!', tone: 'info', y: 215 })
         await this.wait(330)
@@ -391,13 +405,27 @@ export class MatchController {
           } else if (r.outcome === 'blocked') {
             this.fx({ kind: 'shake', icon: 'block', tile: at, ms: 600, y: 150, size: 84 })
             this.popup({ tile: at, text: 'BLOCKED', tone: 'block', y: 235 })
-          } else if (r.targetTile != null && r.targetTile >= 1 && r.targetTile <= 10) {
+          } else if (r.targetTile != null && r.targetTile >= 1 && r.targetTile <= BOARD_SIZE) {
             this.popup({ tile: r.targetTile, text: 'MISS', tone: 'info', y: 80 })
           }
         }
         for (const r of specials) this.popup({ tile: this.tileOf(r.player), text: r.heal > 0 ? `+${r.heal}` : 'MAX', tone: 'heal', y: 235 })
         await this.wait(700)
         for (const r of b.results) this.setUnit(r.player, { pose: this.view.units[r.player].guard ? 'block' : 'idle' })
+        break
+      }
+      case 'respawn': {
+        // the next unit drops in from above onto its start tile
+        const p = b.player
+        this.show(b.state)
+        this.setUnit(p, { gone: false, ko: false, pose: 'idle', guard: false, tile: b.tile, moveMs: 0, lift: 560, liftMs: 0, liftEase: 'in' })
+        await this.wait(70)
+        this.setUnit(p, { lift: 0, liftMs: 480, liftEase: 'in' })
+        await this.wait(480)
+        this.fx({ kind: 'dust', tile: b.tile, ms: 500 })
+        this.setUnit(p, { swap: this.view.units[p].swap + 1 })
+        this.popup({ tile: b.tile, text: `UNIT ${b.unit + 1}`, tone: 'info', y: 235 })
+        await this.wait(600)
         break
       }
       case 'slotEnd': {
@@ -420,7 +448,8 @@ export class MatchController {
       case 'gameOver': {
         this.show(b.state)
         const loser = b.winner === 'draw' ? null : other(b.winner)
-        if (loser != null) this.setUnit(loser, { ko: true, pose: 'idle' })
+        // a unit that fell off the stage is already gone; only an HP knock-out lies down
+        if (loser != null && !b.state.players[loser].fallen.every(Boolean)) this.setUnit(loser, { ko: true, pose: 'idle' })
         if (b.winner !== 'draw') this.setUnit(b.winner, { cheer: true, pose: 'special' })
         this.set({ winner: b.winner, banner: 'K.O.!', hint: '' })
         await this.wait(1200)

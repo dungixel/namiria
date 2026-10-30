@@ -36,7 +36,7 @@ export function HpBar({ side, player, label }: BarProps) {
         <span className="who">{label}</span>
         <span className="uname">{unit.name}</span>
         <span className="pips">
-          {player.team.map((_, i) => <i key={i} className={i === player.active ? 'on' : ''} />)}
+          {player.team.map((_, i) => <i key={i} className={player.fallen[i] ? 'lost' : i === player.active ? 'on' : ''} title={player.fallen[i] ? 'Fell off the stage' : undefined} />)}
         </span>
       </div>
       {showInfo && (

@@ -7,13 +7,14 @@ export const H = 1000
 export const GROUND_Y = 582 // the line the units stand on
 
 // The arena is wider than the screen (like a Smash stage); a camera follows the fighters.
-export const ARENA_X = 60
 export const TILE_W = 190
-export const WORLD_W = ARENA_X * 2 + BOARD_SIZE * TILE_W // 2020
+export const ARENA_X = 260 // room for the void beyond each cliff edge (a thrown unit lands one tile past it)
+export const ARENA_END = ARENA_X + BOARD_SIZE * TILE_W // the right cliff edge
+export const WORLD_W = ARENA_X + ARENA_END // 2230
 export const tileX = (tile: number): number => ARENA_X + (tile - 0.5) * TILE_W
 
 const CAM_PAD = 240 // keep this much screen space around the two fighters
-const Z_MIN = 0.75 // zoomed all the way out the whole stage fits
+const Z_MIN = Math.max(0.65, W / WORLD_W) // zoomed all the way out the whole stage fits
 const Z_MAX = 1.15 // zoomed in when they are close together
 
 /** Camera framing every tile in `tiles` (fighters, plus step/throw options while choosing; may be fractional): zoom + horizontal shift. */

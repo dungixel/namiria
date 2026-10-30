@@ -1,6 +1,6 @@
 # Namiria
 
-A turn-based 2D card duel. Two players, 20 shared HP each, six cards in hand, two actions per turn, and everything plays out on a 10-tile strip. Right now you play against a bot; the code is organised so that the match can later move online (Supabase) and be hosted on GitHub Pages.
+A turn-based 2D card duel. Two players, 20 shared HP each, six cards in hand, two actions per turn, and everything plays out on a 9-tile stage with cliffs at both ends. Right now you play against a bot; the code is organised so that the match can later move online (Supabase) and be hosted on GitHub Pages.
 
 ## Run it
 
@@ -11,11 +11,13 @@ npm run dev        # http://localhost:5173
 
 **No terminal?** Double-click `Namiria.html` in this folder; it is a self-contained build of the game (rebuild it with `npm run build:single`, output in `dist-single/`).
 
+Live version (GitHub Pages, served from `docs/index.html`): https://dungixel.github.io/namiria/ . Rebuild it after changes with `npm run build:single && cp dist-single/* docs/`.
+
 Other scripts: `npm test` (rules + bot tests), `npm run build`, `npm run preview`, `npm run typecheck`.
 
 ## How to play
 
-* Press **Play**. You are paired with a bot instantly. Both of you start on tiles **4** and **6** with **20 HP**.
+* Press **Play**. You are paired with a bot instantly. Both of you start on tiles **4** and **6** of the 9-tile stage (tile 5 is the exact middle) with **20 HP**.
 * Each turn you have **30 seconds** to pick **two cards** from your hand of six (click them, or press `1`-`6`). The first card you click is your 1st action, the second your 2nd. Click a picked card again to take it back. When both players have picked two (or time is up) the cards play out.
 * **Everything is public except the choice:** you can see the bot's six cards and its NEXT card, and it can see yours. Only *which two* each of you picked stays hidden until they are played.
 * After a turn the used cards are replaced: the NEXT card drops into your hand and a new NEXT is drawn.
@@ -29,8 +31,12 @@ Other scripts: `npm test` (rules + bot tests), `npm run build`, `npm run preview
 | **Special** | The unit's special. Umiro heals 1 HP (max 20). |
 | **Step** | Move 1..*Speed* tiles left or right. You choose the tile (10 s) when the card plays. Can't walk through or onto the enemy. |
 | **Block** | Stops any attack during that action, even from behind. Doesn't stop specials. |
-| **Grab** | Enemy exactly 1 tile away: deals ⌈Power / 2⌉, ignores Block and cancels what the victim was doing that action. Then you pick (10 s) where to throw them: up to 2 tiles from you, either side. The damage lands when they hit the ground, not at the grab. |
+| **Grab** | Enemy exactly 1 tile away: deals ⌈Power / 2⌉, ignores Block and cancels what the victim was doing that action. Then you pick (10 s) where to throw them: up to 2 tiles from you, either side, **even over the cliff** (see below). The damage lands when they hit the ground, not at the grab. |
 | **Change** | Switch to the next unit of your team. |
+
+### Cliffs and ring-outs
+
+The stage ends in a cliff on both sides (the hatched half-tile at each end is the danger zone). A Grab throw that reaches past tile 1 or tile 9 sends the victim over the edge: that unit is **lost for the match** (no fall damage) and the next unit of the team drops in on its start tile. HP stays shared. Lose all three units, or reach 0 HP, and you lose. Change skips lost units. Pinned against the edge next to an enemy with a Grab is the dangerous place to be; a Step away or a Block that doesn't help (Grab ignores Block) are your answers.
 
 ### Umiro (the only unit for now)
 
@@ -46,7 +52,9 @@ So moving first means a Step dodges an Attack or Grab aimed at the tile you left
 
 Everything here is a one-line change, mostly in `src/engine/constants.ts` or `units.ts`:
 
-* Board tiles are numbered 1-10; units start on 4 and 6 (so the left player has 3 tiles behind them and the right player 4).
+* The stage has 9 tiles, numbered 1-9; units start on 4 and 6, a mirror image around tile 5.
+* Only Grab throws can send a unit over a cliff for now (no knockback yet). One "void" tile past each edge is the ring-out target.
+* A ring-out costs the unit but no HP; the replacement drops in on its side's start tile (one tile toward its own edge if the enemy stands there).
 * Attack range is *exact* (Umiro hits 2 away, not 1); attacks always point at the enemy.
 * Grab throw range is measured from the grabber (1-2 tiles, either side, the victim's own tile counts as "drop").
 * A unit that is grabbed loses its own action in that slot.

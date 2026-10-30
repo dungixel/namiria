@@ -1,4 +1,4 @@
-import { BOARD_SIZE, GRAB_RANGE, START_TILES, THROW_RANGE, MAX_HP } from './constants'
+import { BOARD_SIZE, GRAB_RANGE, LEFT_VOID, RIGHT_VOID, START_TILES, THROW_RANGE, MAX_HP } from './constants'
 import { dealHand } from './deck'
 import { DEFAULT_TEAM, UNITS, type UnitDef } from './units'
 import type { GameState, PlayerId, PlayerState, UnitId } from './types'
@@ -13,6 +13,7 @@ export function activeUnit(s: GameState, p: PlayerId): UnitDef {
 const freshPlayer = (team: UnitId[], tile: number): PlayerState => ({
   team: team.slice(),
   active: 0,
+  fallen: team.map(() => false),
   tile,
   hp: MAX_HP,
   hand: [],
@@ -46,14 +47,36 @@ export function stepOptions(tile: number, enemyTile: number, speed: number): num
   return out.sort((a, b) => a - b)
 }
 
-/** Where a grabbed unit may be thrown: up to THROW_RANGE tiles from the grabber, on either side. */
+/**
+ * Where a grabbed unit may be thrown: up to THROW_RANGE tiles from the grabber, on either side.
+ * Reaching past the end of the stage is allowed: that is the void tile (LEFT_VOID / RIGHT_VOID), a ring-out.
+ */
 export function throwOptions(grabberTile: number): number[] {
-  const out: number[] = []
+  const out = new Set<number>()
   for (let d = -THROW_RANGE; d <= THROW_RANGE; d++) {
+    if (d === 0) continue
     const t = grabberTile + d
-    if (d !== 0 && t >= 1 && t <= BOARD_SIZE) out.push(t)
+    out.add(t < 1 ? LEFT_VOID : t > BOARD_SIZE ? RIGHT_VOID : t)
   }
-  return out
+  return [...out].sort((a, b) => a - b)
+}
+
+export const isVoid = (tile: number): boolean => tile < 1 || tile > BOARD_SIZE
+export const unitsLeft = (pl: PlayerState): number => pl.fallen.filter((f) => !f).length
+
+/** The next living unit after the active one (the active unit itself if it is the only one left). */
+export function nextLivingUnit(pl: PlayerState): number {
+  for (let i = 1; i <= pl.team.length; i++) {
+    const idx = (pl.active + i) % pl.team.length
+    if (!pl.fallen[idx]) return idx
+  }
+  return pl.active
+}
+
+/** Where a fresh unit drops in: its start tile, or one step toward its own edge if the enemy stands there. */
+export function respawnTile(p: PlayerId, enemyTile: number): number {
+  const start = START_TILES[p]
+  return enemyTile === start ? start + (p === 0 ? -1 : 1) : start
 }
 
 /** Attacks go toward the enemy and reach exactly `range` tiles. */
