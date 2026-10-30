@@ -15,7 +15,12 @@ export default defineConfig({
     __BUILD_TIME__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC'),
   },
   base: single ? './' : (process.env.VITE_BASE ?? '/'),
-  plugins: [react(), ...(single ? [viteSingleFile()] : [])],
+  plugins: [
+    react(),
+    ...(single
+      ? [viteSingleFile(), { name: 'strip-pages-redirect', transformIndexHtml: (html: string) => html.replace(/<script data-pages-redirect>[\s\S]*?<\/script>/, '') }]
+      : []),
+  ],
   build: single ? { outDir: 'dist-single', assetsInlineLimit: 100_000_000 } : {},
   server: { host: true, port: 5173 },
   test: { environment: 'node', include: ['src/**/*.test.ts'] },

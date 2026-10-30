@@ -7,6 +7,8 @@
     <title>Namiria</title>
   </head>
   <body>
+    <!-- If GitHub Pages serves the repo root instead of /docs, send visitors to the built game. Stripped from the built copy. -->
+    <script data-pages-redirect>if (/github\.io$/.test(location.hostname)) location.replace("docs/")</script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
